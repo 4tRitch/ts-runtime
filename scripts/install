@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MANIFEST="$ROOT_DIR/manifests/languages.tsv"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ts-runtime"
+NVIM_SITE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/nvim/site"
+PARSER_DIR="$NVIM_SITE_DIR/parser"
+QUERIES_DIR="$NVIM_SITE_DIR/queries"
+
+clean=0
+if [[ "${1:-}" == "--clean" ]]; then
+  clean=1
+fi
+
+mkdir -p "$CACHE_DIR" "$PARSER_DIR" "$QUERIES_DIR"
+
+if [[ $clean -eq 1 ]]; then
+  rm -rf "$PARSER_DIR" "$QUERIES_DIR"
+  mkdir -p "$PARSER_DIR" "$QUERIES_DIR"
+fi
+
+compile_parser() {
+  local source_root="$1"
+  local parser_name="$2"
+  local parser_c="$source_root/src/parser.c"
+  local output="$PARSER_DIR/$parser_name.so"
+  local cmd=()
+
+  if [[ ! -f "$parser_c" ]]; then
+    echo "[error] falta $parser_c" >&2
+    return 1
+  fi
+
+  local scanner_c="$source_root/src/scanner.c"
+  local scanner_cc="$source_root/src/scanner.cc"
+
+  cmd=(cc -O2 -fPIC -I"$source_root/src" -shared "$parser_c")
+  if [[ -f "$scanner_c" ]]; then
+    cmd+=("$scanner_c")
+  elif [[ -f "$scanner_cc" ]]; then
+    cmd+=("$scanner_cc")
+  fi
+
+  cmd+=(-o "$output")
+  "${cmd[@]}"
+}
+
+copy_queries() {
+  local source_root="$1"
+  local parser_name="$2"
+  local queries_rel="$3"
+  local source_dir=""
+  if [[ "$queries_rel" == "." ]]; then
+    source_dir="$source_root/queries"
+  else
+    source_dir="$source_root/${queries_rel#./}"
+  fi
+  local target_dir="$QUERIES_DIR/$parser_name"
+
+  if [[ ! -d "$source_dir" ]]; then
+    echo "[warn] sin queries para $parser_name ($source_dir)"
+    return
+  fi
+
+  rm -rf "$target_dir"
+  mkdir -p "$target_dir"
+  cp "$source_dir"/*.scm "$target_dir"/
+}
+
+clone_or_update() {
+  local repo_url="$1"
+  local checkout_dir="$2"
+
+  if [[ -d "$checkout_dir/.git" ]]; then
+    git -C "$checkout_dir" pull --ff-only
+  else
+    git clone --depth 1 "$repo_url" "$checkout_dir"
+  fi
+}
+
+while IFS=$'\t' read -r parser_name repo_url repo_dir_name source_subdir queries_rel; do
+  [[ -z "$parser_name" ]] && continue
+
+  checkout_dir="$CACHE_DIR/$repo_dir_name"
+  source_root="$checkout_dir"
+
+  echo "==> $parser_name"
+  clone_or_update "$repo_url" "$checkout_dir"
+  if [[ "$source_subdir" != "." ]]; then
+    source_root="$checkout_dir/$source_subdir"
+  fi
+  compile_parser "$source_root" "$parser_name"
+  copy_queries "$source_root" "$parser_name" "$queries_rel"
+done < "$MANIFEST"
+
+echo
+echo "Runtime instalado en: $NVIM_SITE_DIR"
