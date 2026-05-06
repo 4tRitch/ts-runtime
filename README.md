@@ -15,13 +15,16 @@ Runtime local para usar Tree-sitter del core de Neovim sin depender de `nvim-tre
 - html
 - css
 - javascript
+- typescript
+- tsx
 - svelte
 - go
 - c
 - cpp
 - c_sharp
 - python
-- `javascriptreact` / React vía mapeo al parser `javascript`
+- `javascriptreact` / JSX vía mapeo al parser `javascript`
+- `typescriptreact` / TSX vía mapeo al parser `tsx`
 
 ## Requisitos
 
@@ -46,4 +49,5 @@ Para reinstalar todo limpiando el runtime local:
 
 - Este repo administra artefactos de runtime, no la config de Neovim.
 - `gdscript` no quedó automatizado todavía porque su parser no tiene una fuente estándar tan estable como el resto.
-- `react` queda cubierto mapeando el filetype `javascriptreact` al parser `javascript` desde tu config de Neovim.
+- `javascriptreact` queda cubierto mapeando ese filetype al parser `javascript` desde tu config de Neovim.
+- `typescriptreact` queda cubierto mapeando ese filetype al parser `tsx` desde tu config de Neovim.
